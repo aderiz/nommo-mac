@@ -180,9 +180,9 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Th
 
 - Trying it on a **Nommo V2** or other model and reporting what happens.
 - The real curves behind the **Game, Music and Movie** presets.
-- Apple notarisation, if someone with a Developer ID wants to help ship signed releases.
+- Checking it on an **Intel Mac**: the build is universal, but only Apple silicon has been tested.
 
 ## Licence
 
-[MIT](LICENSE). This project contains no Razer software, drivers, firmware or artwork. The speaker drawings in the
-interface are original illustrations.
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the copyright and trademark notice. This project contains no
+Razer software, drivers, firmware or artwork. The speaker drawings in the interface are original illustrations.
