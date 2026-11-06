@@ -43,5 +43,8 @@ user-visible behaviour, update the README.
 
 ## Releasing
 
-`./scripts/make_dmg.sh` makes a development DMG. `./scripts/release.sh` makes a signed, **notarised** and stapled one;
-the setup it needs (a Developer ID certificate and stored notary credentials) is described at the top of the script.
+`./scripts/make_dmg.sh` makes a development DMG in `Releases/` (which is git-ignored). `./scripts/release.sh` makes a
+signed, **notarised** and stapled one; the setup it needs (a Developer ID certificate and stored notary credentials)
+is described at the top of the script. Release DMGs are signed by the maintainer and published on the
+[GitHub Releases page](https://github.com/aderiz/nommo-mac/releases); they are never committed to the repository.
+Anyone can build from source, so a release is a convenience rather than the only way to get the app.

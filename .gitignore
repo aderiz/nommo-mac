@@ -5,8 +5,9 @@
 xcuserdata/
 DerivedData/
 
-# Build output (the packaged DMG in Releases/ is tracked on purpose)
+# Build output. DMGs are published as GitHub Releases, not committed.
 dist/
+Releases/
 
 # macOS
 .DS_Store

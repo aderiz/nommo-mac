@@ -49,7 +49,8 @@ what Synapse sends them. See [docs/PROTOCOL.md](docs/PROTOCOL.md) if you are int
 **You need:** a Nommo V2 Pro connected by **USB**, and a Mac running macOS 14.2 or later. The app is a universal binary
 (Apple silicon and Intel), but it has only been run on Apple silicon.
 
-1. Download [`Releases/Nommo-0.1.0.dmg`](Releases/Nommo-0.1.0.dmg), open it, and drag **Nommo** into **Applications**.
+1. Download the latest `Nommo-<version>.dmg` from the [**Releases page**](https://github.com/aderiz/nommo-mac/releases/latest),
+   open it, and drag **Nommo** into **Applications**.
 2. Open Nommo. A speaker icon appears in the menu bar; click it.
 
 ### The first launch: macOS will complain
@@ -64,7 +65,7 @@ That is expected for an unnotarised app. To open it anyway:
 If you would rather not run a binary from the internet, **build it yourself** (it takes a minute; see
 [Building from source](#building-from-source)). The source is all here.
 
-The checksum of the download is in [`Releases/Nommo-0.1.0.dmg.sha256`](Releases/Nommo-0.1.0.dmg.sha256).
+Each release lists the SHA-256 checksum of its DMG, so you can check what you downloaded.
 
 ### Permissions
 
