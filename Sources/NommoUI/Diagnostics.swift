@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import NommoKit
 
@@ -12,8 +13,13 @@ public enum Diagnostics {
             "login item: \(LoginItem.statusDescription)",
         ]
 
-        // The speaker over USB HID.
-        if !IOKitHIDTransport.isDevicePresent() {
+        // The speaker over USB HID. Two programs talking to it at once would read each other's replies, so if the
+        // Nommo app is already running, don't query it; the running app having the speaker means it is reachable.
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: info?["CFBundleIdentifier"] as? String ?? "")
+            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+        if !others.isEmpty {
+            lines.append("speaker: skipped, the Nommo app is running and has it (quit the app to test the speaker from here)")
+        } else if !IOKitHIDTransport.isDevicePresent() {
             lines.append("speaker: not found (is it plugged in over USB?)")
         } else {
             do {
