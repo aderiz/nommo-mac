@@ -1,0 +1,6 @@
+[project]
+name = "nommo-research"
+version = "0.1.0"
+description = "Python reference client and probing scripts for the Razer Nommo V2 Pro's HID protocol"
+requires-python = ">=3.12"
+dependencies = ["hidapi>=0.15.0"]

@@ -1,0 +1,27 @@
+# Swift / Xcode
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+DerivedData/
+
+# Build output (the packaged DMG in Releases/ is tracked on purpose)
+dist/
+
+# macOS
+.DS_Store
+
+# Python (research/)
+.venv/
+__pycache__/
+*.pyc
+
+# Local notes and captures
+*.jsonl
+*.etl
+*.pcapng
+
+# Local AI-assistant instructions and settings (personal, not part of the project)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
