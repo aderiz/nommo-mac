@@ -34,16 +34,26 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Sign with a real certificate when one is available. An ad-hoc signature changes with every build, so macOS
-# treats each build as a new app and asks for the System Audio Recording permission again. A certificate-based
-# signature keeps the same identity across builds, so the permission sticks.
-# Override with NOMMO_SIGN_IDENTITY="<name or hash>".
-IDENTITY="${NOMMO_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+# Signing. Preference order: NOMMO_SIGN_IDENTITY, a Developer ID Application certificate, an Apple Development
+# certificate, then ad hoc.
+#
+# - Developer ID is what is needed to notarise a release (see scripts/release.sh).
+# - A real certificate of any kind keeps the app's identity the same across builds, so macOS remembers the
+#   System Audio Recording permission. An ad-hoc signature changes every build and the permission is asked for again.
+# - The hardened runtime is always on, so development builds behave like release builds.
+find_identity() {
+  security find-identity -v -p codesigning | awk -F'"' -v pattern="$1" '$0 ~ pattern {print $2; exit}'
+}
+IDENTITY="${NOMMO_SIGN_IDENTITY:-$(find_identity 'Developer ID Application')}"
+IDENTITY="${IDENTITY:-$(find_identity 'Apple Development')}"
 if [[ -n "$IDENTITY" ]]; then
-  codesign --force --sign "$IDENTITY" --identifier ai.amplified.nommo "$APP"
+  FLAGS=(--force --options runtime --identifier ai.amplified.nommo --sign "$IDENTITY")
+  # Notarisation requires a secure timestamp, which only Developer ID signing uses.
+  [[ "$IDENTITY" == "Developer ID Application"* ]] && FLAGS+=(--timestamp)
+  codesign "${FLAGS[@]}" "$APP"
   echo "Signed with: $IDENTITY"
 else
-  codesign --force --sign - --identifier ai.amplified.nommo "$APP"
+  codesign --force --options runtime --sign - --identifier ai.amplified.nommo "$APP"
   echo "Signed ad hoc (permissions will be requested again after each rebuild)"
 fi
 echo "Built $APP"

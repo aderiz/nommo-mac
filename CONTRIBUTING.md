@@ -40,3 +40,8 @@ describes how it was done here.
 
 Keep them focused, explain *why* as well as what, and make sure `swift build` and `swift test` pass. If you change
 user-visible behaviour, update the README.
+
+## Releasing
+
+`./scripts/make_dmg.sh` makes a development DMG. `./scripts/release.sh` makes a signed, **notarised** and stapled one;
+the setup it needs (a Developer ID certificate and stored notary credentials) is described at the top of the script.

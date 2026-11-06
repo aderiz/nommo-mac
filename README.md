@@ -103,6 +103,20 @@ nommoctl brightness 128
 
 Build it with `swift build --product nommoctl`. It's a development tool; the app is the main way to use this.
 
+## If something doesn't work
+
+Run this in Terminal. It checks that the speaker can be opened and that system audio capture is allowed, and it
+prints nothing that identifies you or your speaker:
+
+```sh
+/Applications/Nommo.app/Contents/MacOS/Nommo --diagnose
+```
+
+- **"speaker: not found"**: it isn't plugged in over USB, or it is on another input.
+- **"found but could not be opened"**: Razer Synapse, or a virtual machine with the speaker attached, has it.
+- **"system audio tap: failed"**: allow Nommo under System Settings → Privacy & Security → System Audio Recording
+  (only Spatial audio and the Music lighting effect need it).
+
 ## Compatibility
 
 | Speaker | Status |

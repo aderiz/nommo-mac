@@ -10,7 +10,12 @@ struct NommoMenuBarApp: App {
         // Scripting hooks, handled before any UI appears:
         //   Nommo --login-status        print whether the app opens at login
         //   Nommo --set-login on|off    turn opening at login on or off
+        //   Nommo --diagnose            print a health check (speaker, audio permission) for bug reports
         let arguments = CommandLine.arguments
+        if arguments.contains("--diagnose") {
+            print(Diagnostics.report())
+            exit(0)
+        }
         if arguments.contains("--login-status") {
             print("login item: \(LoginItem.statusDescription)")
             exit(0)
