@@ -53,19 +53,16 @@ what Synapse sends them. See [docs/PROTOCOL.md](docs/PROTOCOL.md) if you are int
    open it, and drag **Nommo** into **Applications**.
 2. Open Nommo. A speaker icon appears in the menu bar; click it.
 
-### The first launch: macOS will complain
+### Is it safe to open?
 
-This build is **not notarised by Apple** (that needs a paid Apple Developer ID, which this project doesn't have), so
-macOS will refuse to open it the first time with a message like *"Apple could not verify Nommo is free of malware"*.
-That is expected for an unnotarised app. To open it anyway:
+The release is signed with a Developer ID certificate and **notarised by Apple**, so macOS checks it and opens it
+without any warnings beyond the usual one for apps downloaded from the internet (*"Nommo is an app downloaded from the
+Internet. Are you sure you want to open it?"*, which you confirm with **Open**).
 
-- Go to **System Settings → Privacy & Security**, scroll to the message about Nommo and click **Open Anyway**; or
-- run `xattr -dr com.apple.quarantine /Applications/Nommo.app` in Terminal.
-
-If you would rather not run a binary from the internet, **build it yourself** (it takes a minute; see
-[Building from source](#building-from-source)). The source is all here.
-
-Each release lists the SHA-256 checksum of its DMG, so you can check what you downloaded.
+Notarisation means Apple scanned the build for known malware; it does not mean Apple has reviewed or endorses the app.
+If you would rather not run a downloaded binary at all, **build it yourself**; it takes a minute (see
+[Building from source](#building-from-source)). The source is all here, and each release lists the SHA-256 checksum of
+its DMG so you can check what you downloaded.
 
 ### Permissions
 

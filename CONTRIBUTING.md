@@ -43,8 +43,11 @@ user-visible behaviour, update the README.
 
 ## Releasing
 
-`./scripts/make_dmg.sh` makes a development DMG in `Releases/` (which is git-ignored). `./scripts/release.sh` makes a
-signed, **notarised** and stapled one; the setup it needs (a Developer ID certificate and stored notary credentials)
-is described at the top of the script. Release DMGs are signed by the maintainer and published on the
+- `./scripts/make_dmg.sh` makes a development DMG in `Releases/` (which is git-ignored).
+- `./scripts/release_via_xcode.sh` makes a signed, **notarised** and stapled DMG using the Apple account Xcode is signed in
+  to (a paid membership is needed; no app-specific password). The setup is described at the top of the script.
+- `./scripts/release.sh` does the same with `notarytool`, for a Developer ID certificate that lives in your keychain.
+
+Release DMGs are signed by the maintainer and published on the
 [GitHub Releases page](https://github.com/aderiz/nommo-mac/releases); they are never committed to the repository.
 Anyone can build from source, so a release is a convenience rather than the only way to get the app.
