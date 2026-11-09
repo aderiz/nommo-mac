@@ -104,9 +104,9 @@ public final class ScreenSceneSource: NSObject, SCStreamOutput, SCStreamDelegate
     }
 
     public func stream(_ stream: SCStream, didStopWithError error: Error) {
+        // Drop the last reading too, so a stream that has died is not mistaken for a picture that has not changed.
         state.withLock {
-            $0.running = false
-            $0.error = error.localizedDescription
+            $0 = State(running: false, error: error.localizedDescription)
         }
     }
 }

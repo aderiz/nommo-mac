@@ -39,7 +39,7 @@ public enum Diagnostics {
             }
         }
 
-        // System audio capture, which Spatial audio and the Music lighting effect need.
+        // System audio capture, which Spatial audio and the Music and Movie lighting effects need.
         let monitor = AudioLevelMonitor()
         do {
             try monitor.start()
@@ -49,6 +49,13 @@ public enum Diagnostics {
         } catch {
             lines.append("system audio tap: failed (\(error)). Check System Settings, Privacy & Security, System Audio Recording.")
         }
+
+        // Screen Recording, which the Movie lighting effect needs. Checked without prompting.
+        lines.append(
+            ScreenSceneSource.hasPermission
+                ? "screen recording: allowed"
+                : "screen recording: not allowed (only Movie lighting needs it). Check System Settings, Privacy & Security, Screen & System Audio Recording."
+        )
         return lines.joined(separator: "\n")
     }
 }

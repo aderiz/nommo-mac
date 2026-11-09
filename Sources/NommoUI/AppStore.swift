@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import NommoKit
 import Observation
@@ -20,8 +21,14 @@ public final class AppStore {
     private(set) var activePreset: EQPreset?
     /// Set when spatial audio could not start (permission denied, speaker output missing, …).
     private(set) var spatialProblem: String?
-    /// Set when music-reactive lighting could not listen to system audio.
-    private(set) var musicProblem: String?
+    /// Set when Music or Movie lighting could not listen to system audio.
+    private(set) var audioProblem: String?
+    /// Set when Movie mode could not read the screen.
+    private(set) var movieProblem: String?
+    /// True while Screen Recording has not been allowed, so the interface can offer to open Settings.
+    private(set) var movieNeedsPermission = false
+    /// What is driving the lights in Movie mode: the picture, or the soundtrack when the picture can't be read.
+    private(set) var movieSource: MovieSource?
     /// Whether the app opens at login, and whether macOS is waiting for the user to approve that.
     private(set) var launchAtLogin = LoginItem.isEnabled
     private(set) var loginNeedsApproval = LoginItem.needsApproval
@@ -34,6 +41,8 @@ public final class AppStore {
     @ObservationIgnored private var eqTask: Task<Void, Never>?
     @ObservationIgnored private let spatial = SpatialAudio()
     @ObservationIgnored private let levelMonitor = AudioLevelMonitor()
+    @ObservationIgnored private let screen = ScreenSceneSource()
+    @ObservationIgnored private var movieTask: Task<Void, Never>?
 
     public init() {
         isPreview = false
@@ -42,13 +51,19 @@ public final class AppStore {
     }
 
     /// A store with fixed state and no hardware, for snapshots and previews.
-    init(preview settings: Settings, status: Status = .connected(serial: "000000000000000"), preset: EQPreset? = .custom) {
+    init(
+        preview settings: Settings, status: Status = .connected(serial: "000000000000000"), preset: EQPreset? = .custom,
+        movie: (source: MovieSource?, problem: String?, needsPermission: Bool) = (.picture, nil, false)
+    ) {
         self.settings = settings
         self.status = status
         self.activePreset = preset
         self.isPreview = true
         launchAtLogin = false
         loginNeedsApproval = false
+        movieSource = movie.source
+        movieProblem = movie.problem
+        movieNeedsPermission = movie.needsPermission
     }
 
     @ObservationIgnored let isPreview: Bool
@@ -60,7 +75,7 @@ public final class AppStore {
         case .off: (.black, .black)
         case .solid: (settings.left, settings.right)
         case .breathing: isPreview ? (settings.breathFirst, settings.breathFirst) : (observedLeft, observedRight)
-        case .spectrum, .music: isPreview ? (settings.left, settings.right) : (observedLeft, observedRight)
+        case .spectrum, .music, .movie: isPreview ? (settings.left, settings.right) : (observedLeft, observedRight)
         }
     }
 
@@ -110,9 +125,11 @@ public final class AppStore {
             let serial = try await device.serialNumber()
             let bands = try await device.eqBands()
             let monitor = levelMonitor
+            let screen = screen
             let engine = LightingEngine(
                 device: device,
                 levels: { monitor.levels },
+                scene: { screen.latest },
                 frameObserver: { [weak self] left, right in
                     Task { @MainActor in
                         self?.observedLeft = left
@@ -130,6 +147,7 @@ public final class AppStore {
             try await device.setBrightness(brightnessByte)
             await engine.apply(settings.effect)
             updateLevelMonitor()
+            updateMovie()
             applySpatial()
         } catch NommoError.openFailed {
             status = .unavailable("Speaker is in use by another app (Synapse or a virtual machine?)")
@@ -148,6 +166,7 @@ public final class AppStore {
         device = nil
         self.engine = nil
         status = .unavailable(reason)
+        updateMovie()
     }
 
     func reconnect() {
@@ -162,24 +181,84 @@ public final class AppStore {
     func lightingChanged() {
         settings.save()
         updateLevelMonitor()
+        updateMovie()
         guard let engine else { return }
         let effect = settings.effect
         Task { await engine.apply(effect) }
     }
 
-    /// Listens to system audio only while the Music effect is selected.
+    /// Listens to system audio only while an effect that reacts to it is selected: Music, and Movie for its
+    /// soundtrack fallback.
     private func updateLevelMonitor() {
-        guard isConnected, settings.kind == .music else {
+        guard isConnected, settings.kind == .music || settings.kind == .movie else {
             levelMonitor.stop()
-            musicProblem = nil
+            audioProblem = nil
             return
         }
         do {
             try levelMonitor.start()
-            musicProblem = nil
+            audioProblem = nil
         } catch {
             levelMonitor.stop()
-            musicProblem = "Couldn't listen to system audio: \(error). Allow System Audio Recording for Nommo in System Settings → Privacy & Security."
+            let allow = "Allow System Audio Recording for Nommo in System Settings → Privacy & Security."
+            audioProblem = settings.kind == .movie
+                ? "Allow System Audio Recording for protected video."
+                : "Couldn't listen to system audio: \(error). \(allow)"
+        }
+    }
+
+    // MARK: - Movie
+
+    /// Watches the screen only while Movie is selected. Safe to call on every lighting change.
+    private func updateMovie() {
+        if isConnected, settings.kind == .movie, !isPreview {
+            guard movieTask == nil else { return }
+            movieTask = Task { [weak self] in await self?.superviseMovie() }
+        } else {
+            movieTask?.cancel()
+            movieTask = nil
+            movieSource = nil
+            movieProblem = nil
+            movieNeedsPermission = false
+            let screen = screen
+            Task { await screen.stop() }
+        }
+    }
+
+    /// Keeps screen capture running while Movie is selected (the system ends it when a display sleeps or changes),
+    /// and mirrors what the engine reports it is following.
+    private func superviseMovie() async {
+        var asked = false
+        var retryAt = Date.distantPast
+        while !Task.isCancelled {
+            // Ask for Screen Recording once; after that only try again once it has been allowed.
+            if !screen.isRunning, Date() >= retryAt, ScreenSceneSource.hasPermission || !asked {
+                asked = true
+                do {
+                    try await screen.start()
+                    movieProblem = nil
+                    movieNeedsPermission = false
+                } catch ScreenSceneError.noPermission {
+                    movieNeedsPermission = true
+                    movieProblem = "Allow Nommo to record the screen in Privacy & Security. Until then the lights follow the sound."
+                } catch {
+                    movieNeedsPermission = false
+                    movieProblem = "Couldn't read the screen. Trying again…"
+                    retryAt = Date().addingTimeInterval(3)
+                }
+            }
+            if screen.isRunning, movieProblem != nil {
+                movieProblem = nil
+                movieNeedsPermission = false
+            }
+            if let engine { movieSource = await engine.movieSource }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+    }
+
+    func openScreenRecordingSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -325,6 +404,9 @@ public final class AppStore {
     public func shutdown() {
         spatial.stop()
         levelMonitor.stop()
+        movieTask?.cancel()
+        let screen = screen
+        Task { await screen.stop() }
         monitor?.cancel()
         let engine = engine
         Task { await engine?.stop() }

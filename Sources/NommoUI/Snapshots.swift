@@ -41,6 +41,11 @@ public enum SnapshotRenderer {
         music.left = RGB(0, 214, 170)
         music.right = RGB(0, 214, 170)
 
+        var movie = Settings()
+        movie.kind = .movie
+        movie.left = RGB(255, 140, 40)
+        movie.right = RGB(255, 205, 120)
+
         var eq = Settings()
         eq.kind = .solid
         eq.left = RGB(64, 200, 255)
@@ -62,6 +67,16 @@ public enum SnapshotRenderer {
             ("light-solid", AppStore(preview: solid), .light),
             ("light-spectrum", AppStore(preview: spectrum), .light),
             ("light-music", AppStore(preview: music), .light),
+            ("light-movie", AppStore(preview: movie), .light),
+            ("light-movie-sound", AppStore(preview: movie, movie: (.soundtrack, nil, false)), .light),
+            ("light-movie-permission", AppStore(
+                preview: movie,
+                movie: (nil, "Allow Nommo to record the screen in Privacy & Security. Until then the lights follow the sound.", true)
+            ), .light),
+            ("light-movie-audio", AppStore(
+                preview: movie,
+                movie: (.picture, "Allow System Audio Recording for protected video.", false)
+            ), .light),
             ("light-breathe", AppStore(preview: breathe), .light),
             ("sound-custom", AppStore(preview: eq), .sound),
             ("sound-preset", AppStore(preview: eq, preset: .music), .sound),

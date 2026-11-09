@@ -181,15 +181,23 @@ private struct LightPanel: View {
     @Bindable var store: AppStore
     @Environment(\.accent) private var accent
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+    /// Seven effects in two rows: four, then three wider tiles.
+    private var tileRows: [[Settings.Kind]] {
+        let all = Settings.Kind.allCases
+        return [Array(all.prefix(4)), Array(all.dropFirst(4))]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Settings.Kind.allCases) { kind in
-                    EffectTile(kind: kind, selected: kind == store.settings.kind) {
-                        withAnimation(.snappy(duration: 0.2)) { store.settings.kind = kind }
-                        store.lightingChanged()
+            VStack(spacing: 8) {
+                ForEach(tileRows.indices, id: \.self) { row in
+                    HStack(spacing: 10) {
+                        ForEach(tileRows[row]) { kind in
+                            EffectTile(kind: kind, selected: kind == store.settings.kind) {
+                                withAnimation(.snappy(duration: 0.2)) { store.settings.kind = kind }
+                                store.lightingChanged()
+                            }
+                        }
                     }
                 }
             }
@@ -219,7 +227,26 @@ private struct LightPanel: View {
                         title: "Sensitivity", valueText: String(format: "%.1f×", store.settings.musicSensitivity),
                         value: sensitivity, range: 0.5 ... 2.5
                     )
-                    if let problem = store.musicProblem { warning(problem) }
+                    if let problem = store.audioProblem { warning(problem) }
+                case .movie:
+                    if store.movieNeedsPermission, let problem = store.movieProblem {
+                        // Nothing to tune until the screen can be read, so the fix gets the whole panel.
+                        warning(problem, lines: 2)
+                        QuietButton(title: "Open Privacy Settings", systemImage: "lock.shield") {
+                            store.openScreenRecordingSettings()
+                        }
+                    } else {
+                        movieStatus
+                        InlineSlider(
+                            title: "Intensity", valueText: "\(Int((store.settings.movieIntensity * 100).rounded()))%",
+                            value: movieIntensity
+                        )
+                        InlineSlider(
+                            title: "Smoothness", valueText: "\(Int((store.settings.movieSmoothness * 100).rounded()))%",
+                            value: movieSmoothness
+                        )
+                        if let problem = store.movieProblem ?? store.audioProblem { warning(problem, lines: 1) }
+                    }
                 }
             }
 
@@ -249,6 +276,34 @@ private struct LightPanel: View {
 
     private var sensitivity: Binding<Double> {
         Binding(get: { store.settings.musicSensitivity }, set: { store.settings.musicSensitivity = $0; store.lightingChanged() })
+    }
+
+    private var movieIntensity: Binding<Double> {
+        Binding(get: { store.settings.movieIntensity }, set: { store.settings.movieIntensity = $0; store.lightingChanged() })
+    }
+
+    private var movieSmoothness: Binding<Double> {
+        Binding(get: { store.settings.movieSmoothness }, set: { store.settings.movieSmoothness = $0; store.lightingChanged() })
+    }
+
+    /// What the lights are following right now.
+    private var movieStatus: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Circle()
+                .fill(store.movieSource == .soundtrack ? Theme.faint : accent.color)
+                .frame(width: 7, height: 7)
+                .offset(y: -1)
+            Text(movieStatusText).font(Theme.caption).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var movieStatusText: String {
+        switch store.movieSource {
+        case .picture: "Following the picture, left and right"
+        case .soundtrack: "Can't read this video, following the sound"
+        case nil: store.movieProblem == nil ? "Looking at the screen…" : "Following the sound for now"
+        }
     }
 
     // MARK: Colour pickers
@@ -317,8 +372,9 @@ private struct LightPanel: View {
         Text(text).font(Theme.caption).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
     }
 
-    private func warning(_ text: String) -> some View {
-        Text(text).font(Theme.caption).foregroundStyle(Color(hex: 0xFF8A7A)).fixedSize(horizontal: false, vertical: true)
+    private func warning(_ text: String, lines: Int? = nil) -> some View {
+        Text(text).font(Theme.caption).foregroundStyle(Color(hex: 0xFF8A7A))
+            .lineLimit(lines).fixedSize(horizontal: false, vertical: true)
     }
 }
 

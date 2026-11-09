@@ -303,7 +303,9 @@ struct InlineSlider: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(title).font(Theme.label).foregroundStyle(Theme.dim).frame(width: 70, alignment: .leading)
+            Text(title).font(Theme.label).foregroundStyle(Theme.dim)
+                .lineLimit(1).minimumScaleFactor(0.85)
+                .frame(width: 70, alignment: .leading)
             GlowSlider(value: $value, range: range)
             Text(valueText).font(Theme.number(12)).foregroundStyle(Theme.text)
                 .lineLimit(1).minimumScaleFactor(0.8)

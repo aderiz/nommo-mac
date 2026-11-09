@@ -4,7 +4,7 @@ import NommoKit
 /// Everything the app remembers between launches.
 struct Settings: Codable, Equatable {
     enum Kind: String, Codable, CaseIterable, Identifiable {
-        case builtIn, solid, breathing, spectrum, music, off
+        case builtIn, solid, breathing, spectrum, music, movie, off
 
         var id: String { rawValue }
 
@@ -15,6 +15,7 @@ struct Settings: Codable, Equatable {
             case .breathing: "Breathe"
             case .spectrum: "Spectrum"
             case .music: "Music"
+            case .movie: "Movie"
             case .off: "Off"
             }
         }
@@ -26,6 +27,7 @@ struct Settings: Codable, Equatable {
             case .breathing: "wind"
             case .spectrum: "rainbow"
             case .music: "waveform"
+            case .movie: "film"
             case .off: "moon.zzz.fill"
             }
         }
@@ -52,6 +54,9 @@ struct Settings: Codable, Equatable {
     var musicStyle: MusicStyle = .pulse
     /// 1 = normal; higher makes the lights react to quieter sound.
     var musicSensitivity: Double = 1
+    /// Movie mode: how strongly the lights show the scene, and how slowly they settle. Both 0...1.
+    var movieIntensity = MovieSettings.standard.intensity
+    var movieSmoothness = MovieSettings.standard.smoothness
     /// Spatial audio is off by default: it reroutes system audio through this app.
     var spatialEnabled = false
     var spatialMode: SpatialMode = .immersive
@@ -76,6 +81,8 @@ struct Settings: Codable, Equatable {
         breathSecond = try c.decodeIfPresent(RGB.self, forKey: .breathSecond) ?? d.breathSecond
         musicStyle = try c.decodeIfPresent(MusicStyle.self, forKey: .musicStyle) ?? d.musicStyle
         musicSensitivity = try c.decodeIfPresent(Double.self, forKey: .musicSensitivity) ?? d.musicSensitivity
+        movieIntensity = try c.decodeIfPresent(Double.self, forKey: .movieIntensity) ?? d.movieIntensity
+        movieSmoothness = try c.decodeIfPresent(Double.self, forKey: .movieSmoothness) ?? d.movieSmoothness
         eqProfiles = try c.decodeIfPresent([EQProfile].self, forKey: .eqProfiles) ?? d.eqProfiles
         activeEQProfile = try c.decodeIfPresent(UUID.self, forKey: .activeEQProfile)
         spatialEnabled = try c.decodeIfPresent(Bool.self, forKey: .spatialEnabled) ?? d.spatialEnabled
@@ -90,6 +97,7 @@ struct Settings: Codable, Equatable {
         case .breathing: .breathing(first: breathFirst, second: breathSecond, period: period)
         case .spectrum: .spectrum(period: period, offset: mirrorSpectrum ? 0 : 0.5)
         case .music: .music(left: left, right: right, style: musicStyle, sensitivity: musicSensitivity)
+        case .movie: .movie(MovieSettings(intensity: movieIntensity, smoothness: movieSmoothness))
         case .off: .off
         }
     }
