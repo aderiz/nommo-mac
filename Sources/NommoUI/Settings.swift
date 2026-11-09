@@ -51,6 +51,8 @@ struct Settings: Codable, Equatable {
     var eqProfiles: [EQProfile] = []
     /// The profile the current Custom curve was loaded from or saved as (it may since have been edited).
     var activeEQProfile: UUID?
+    /// The style chosen under the Music preset. `.standard` is the speaker's own Music tuning.
+    var musicGenre: MusicGenre = .standard
     var musicStyle: MusicStyle = .pulse
     /// 1 = normal; higher makes the lights react to quieter sound.
     var musicSensitivity: Double = 1
@@ -85,6 +87,7 @@ struct Settings: Codable, Equatable {
         movieSmoothness = try c.decodeIfPresent(Double.self, forKey: .movieSmoothness) ?? d.movieSmoothness
         eqProfiles = try c.decodeIfPresent([EQProfile].self, forKey: .eqProfiles) ?? d.eqProfiles
         activeEQProfile = try c.decodeIfPresent(UUID.self, forKey: .activeEQProfile)
+        musicGenre = (try? c.decodeIfPresent(MusicGenre.self, forKey: .musicGenre)) ?? d.musicGenre
         spatialEnabled = try c.decodeIfPresent(Bool.self, forKey: .spatialEnabled) ?? d.spatialEnabled
         spatialMode = try c.decodeIfPresent(SpatialMode.self, forKey: .spatialMode) ?? d.spatialMode
         spatialAmount = try c.decodeIfPresent(Double.self, forKey: .spatialAmount) ?? d.spatialAmount

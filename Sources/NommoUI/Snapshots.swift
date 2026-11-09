@@ -55,6 +55,11 @@ public enum SnapshotRenderer {
         eq.eqProfiles = [profile]
         eq.activeEQProfile = profile.id
 
+        var rock = eq
+        rock.musicGenre = .rock
+        var treble = eq
+        treble.musicGenre = .trebleReducer
+
         var space = Settings()
         space.kind = .solid
         space.left = RGB(150, 100, 255)
@@ -80,6 +85,8 @@ public enum SnapshotRenderer {
             ("light-breathe", AppStore(preview: breathe), .light),
             ("sound-custom", AppStore(preview: eq), .sound),
             ("sound-preset", AppStore(preview: eq, preset: .music), .sound),
+            ("sound-music-rock", AppStore(preview: rock, preset: .custom, playingMusicGenre: true), .sound),
+            ("sound-music-treble", AppStore(preview: treble, preset: .custom, playingMusicGenre: true), .sound),
             ("space", AppStore(preview: space), .space),
             ("offline", AppStore(preview: Settings(), status: .unavailable("Nommo V2 Pro not found")), .light),
         ]

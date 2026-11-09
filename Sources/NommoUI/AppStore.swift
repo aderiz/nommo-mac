@@ -19,6 +19,8 @@ public final class AppStore {
     private(set) var observedRight = RGB.black
     /// The EQ preset the speaker reports as active; nil until known.
     private(set) var activePreset: EQPreset?
+    /// True while the speaker's band registers hold a music style's curve rather than the user's own Custom curve.
+    private(set) var bandsHoldMusicGenre = false
     /// Set when spatial audio could not start (permission denied, speaker output missing, …).
     private(set) var spatialProblem: String?
     /// Set when Music or Movie lighting could not listen to system audio.
@@ -53,11 +55,13 @@ public final class AppStore {
     /// A store with fixed state and no hardware, for snapshots and previews.
     init(
         preview settings: Settings, status: Status = .connected(serial: "000000000000000"), preset: EQPreset? = .custom,
-        movie: (source: MovieSource?, problem: String?, needsPermission: Bool) = (.picture, nil, false)
+        movie: (source: MovieSource?, problem: String?, needsPermission: Bool) = (.picture, nil, false),
+        playingMusicGenre: Bool = false
     ) {
         self.settings = settings
         self.status = status
         self.activePreset = preset
+        self.bandsHoldMusicGenre = playingMusicGenre
         self.isPreview = true
         launchAtLogin = false
         loginNeedsApproval = false
@@ -67,6 +71,18 @@ public final class AppStore {
     }
 
     @ObservationIgnored let isPreview: Bool
+
+    /// True while a music style (not the speaker's own Music tuning) is what you hear.
+    var musicGenreLive: Bool {
+        bandsHoldMusicGenre && activePreset == .custom && settings.musicGenre != .standard
+    }
+
+    /// The style the speaker is playing under Music; `.standard` when it is on its own tuning.
+    var shownGenre: MusicGenre { musicGenreLive ? settings.musicGenre : .standard }
+
+    /// The preset the interface shows as chosen. A music style runs through the speaker's Custom EQ but belongs
+    /// under Music.
+    var shownPreset: EQPreset? { musicGenreLive ? .music : activePreset }
 
     /// Colours to show on the stage, or nil when the speakers run their own cycle and we can't know them.
     var stageColors: (left: RGB, right: RGB)? {
@@ -141,8 +157,7 @@ public final class AppStore {
             }
             self.device = device
             self.engine = engine
-            settings.eqDecibels = bands.map(EQ.decibels(fromRaw:))
-            activePreset = try? await device.eqPreset()
+            adoptEQ(preset: try? await device.eqPreset(), bands: bands)
             status = .connected(serial: serial)
             try await device.setBrightness(brightnessByte)
             await engine.apply(settings.effect)
@@ -272,17 +287,95 @@ public final class AppStore {
         }
     }
 
+    /// Runs speaker EQ writes one after another, so quick changes can't interleave and leave the speaker with a
+    /// mix of two of them.
+    private func queueEQ(_ work: @escaping @MainActor () async -> Void) {
+        let previous = eqTask
+        previous?.cancel()
+        eqTask = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }
+            await work()
+        }
+    }
+
+    /// Takes the speaker's own EQ state as the truth. Bands that hold a music style's curve aren't the user's Custom
+    /// curve, so the one saved here is kept.
+    private func adoptEQ(preset: EQPreset?, bands: [UInt8]) {
+        if let style = MusicGenre.matching(rawBands: bands) {
+            bandsHoldMusicGenre = true
+            if preset == .custom {
+                settings.musicGenre = style
+                settings.save()
+            }
+        } else {
+            bandsHoldMusicGenre = false
+            settings.eqDecibels = bands.map(EQ.decibels(fromRaw:))
+        }
+        activePreset = preset
+    }
+
+    /// Runs a speaker write, once more if it fails: the speaker now and then times out on a single command.
+    private func retrying(_ operation: () async throws -> Void) async -> Bool {
+        for attempt in 0 ..< 2 {
+            do { try await operation(); return true } catch {
+                if attempt == 0 { try? await Task.sleep(for: .milliseconds(250)) }
+            }
+        }
+        return false
+    }
+
     func selectPreset(_ preset: EQPreset) {
         guard let device else { return }
-        Task {
+        queueEQ { [self] in
+            if preset == .music, settings.musicGenre != .standard {
+                // Music plays the chosen style, which the speaker holds as a Custom curve.
+                let genre = settings.musicGenre
+                if await retrying({ try await device.setMusicGenre(genre) }) {
+                    activePreset = .custom
+                    bandsHoldMusicGenre = true
+                } else if let bands = try? await device.eqBands() {
+                    // A write failed part-way: show what the speaker really has rather than what was asked for.
+                    adoptEQ(preset: try? await device.eqPreset(), bands: bands)
+                }
+                return
+            }
             try? await device.setEQPreset(preset)
             activePreset = (try? await device.eqPreset()) ?? preset
-            // Built-in presets don't change the band registers, but Custom may reset them: show what the speaker has.
-            if activePreset == .custom, let bands = try? await device.eqBands() {
+            guard activePreset == .custom else { return }
+            if bandsHoldMusicGenre {
+                // The bands still hold a music style's curve: put the user's own Custom curve back.
+                let raw = settings.eqDecibels.map(EQ.raw(fromDecibels:))
+                if await retrying({ try await device.setEQBands(raw) }) {
+                    bandsHoldMusicGenre = false
+                } else if let bands = try? await device.eqBands() {
+                    adoptEQ(preset: try? await device.eqPreset(), bands: bands)
+                }
+            } else if let bands = try? await device.eqBands() {
+                // Built-in presets don't change the band registers, but Custom may reset them: show what the speaker has.
                 settings.eqDecibels = bands.map(EQ.decibels(fromRaw:))
                 settings.save()
             }
         }
+    }
+
+    /// Chooses a style under Music. `.standard` goes back to the speaker's own Music tuning.
+    func selectGenre(_ genre: MusicGenre) {
+        settings.musicGenre = genre
+        settings.save()
+        selectPreset(.music)
+    }
+
+    /// Starts the Custom EQ from the style being played. The speaker already holds that curve, so nothing is sent.
+    func editGenreAsCustom() {
+        guard musicGenreLive, let curve = settings.musicGenre.decibels else {
+            selectPreset(.custom)
+            return
+        }
+        settings.eqDecibels = curve
+        settings.activeEQProfile = nil
+        settings.save()
+        bandsHoldMusicGenre = false
     }
 
     /// Called only when the user drags a band, never when values are read back from the speaker.
@@ -348,8 +441,10 @@ public final class AppStore {
     /// Custom bands only apply under the Custom preset, so switch to it first if needed.
     private func writeEQ() {
         settings.save()
-        eqTask?.cancel()
+        let previous = eqTask
+        previous?.cancel()
         eqTask = Task { [weak self] in
+            await previous?.value
             try? await Task.sleep(for: .milliseconds(150))
             guard let self, !Task.isCancelled, let device else { return }
             if activePreset != .custom {
@@ -358,6 +453,7 @@ public final class AppStore {
             }
             let raw = settings.eqDecibels.map(EQ.raw(fromDecibels:))
             try? await device.setEQBands(raw)
+            bandsHoldMusicGenre = false
         }
     }
 

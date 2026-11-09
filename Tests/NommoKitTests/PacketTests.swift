@@ -44,6 +44,75 @@ struct EQTests {
     }
 }
 
+@Suite("Music styles")
+struct MusicGenreTests {
+    @Test func defaultIsTheSpeakersOwnTuning() {
+        #expect(MusicGenre.standard.decibels == nil)
+        #expect(MusicGenre.standard.rawBands == nil)
+        #expect(MusicGenre.allCases.first == .standard)
+    }
+
+    @Test func everyStyleIsATenBandCurveWithinSpan() {
+        for genre in MusicGenre.allCases where genre != .standard {
+            let curve = try! #require(genre.decibels)
+            #expect(curve.count == EQ.bandCount, "\(genre.title)")
+            #expect(curve.allSatisfy { abs($0) <= 6 }, "\(genre.title) stays modest")
+            #expect(genre == .flat || curve.contains { $0 != 0 }, "\(genre.title) is not flat")
+            #expect(curve.allSatisfy { $0 == $0.rounded() }, "\(genre.title) uses whole dB")
+        }
+    }
+
+    @Test func stylesAreDistinct() {
+        let curves = MusicGenre.allCases.compactMap(\.decibels)
+        #expect(Set(curves).count == curves.count)
+        #expect(Set(MusicGenre.allCases.map(\.title)).count == MusicGenre.allCases.count)
+    }
+
+    @Test func rawBandsMatchTheSpeakersScale() throws {
+        let raw = try #require(MusicGenre.rock.rawBands)
+        #expect(raw == MusicGenre.rock.decibels?.map { UInt8(Int(EQ.flatRaw) + Int($0)) })
+    }
+
+    @Test func recognisesAStyleFromTheSpeakersBands() throws {
+        for genre in MusicGenre.allCases where genre != .standard && genre != .flat {
+            #expect(MusicGenre.matching(rawBands: try #require(genre.rawBands)) == genre)
+        }
+    }
+
+    @Test func aFlatCurveIsNeverTakenForAStyle() throws {
+        // Flat is also what a user's own flat Custom curve looks like, so it must stay a Custom curve on reconnect.
+        #expect(MusicGenre.flat.decibels == Array(repeating: 0, count: EQ.bandCount))
+        #expect(MusicGenre.matching(rawBands: try #require(MusicGenre.flat.rawBands)) == nil)
+        #expect(MusicGenre.matching(rawBands: Array(repeating: EQ.flatRaw, count: EQ.bandCount)) == nil)
+    }
+
+    @Test func menuOrderPutsDefaultAndFlatFirstThenAlphabetical() {
+        let titles = MusicGenre.allCases.map(\.title)
+        #expect(Array(titles.prefix(2)) == ["Default", "Flat"])
+        let rest = Array(titles.dropFirst(2))
+        #expect(rest == rest.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+    }
+
+    @Test func offersTheCommonStyles() {
+        let titles = Set(MusicGenre.allCases.map(\.title))
+        for expected in ["Acoustic", "Bass booster", "Bass reducer", "Classical", "Dance", "Deep", "Electronic", "Hip-hop",
+                         "Jazz", "Latin", "Loudness", "Lounge", "Piano", "Pop", "R&B", "Rock", "Small speakers",
+                         "Spoken word", "Treble booster", "Treble reducer", "Vocal booster"] {
+            #expect(titles.contains(expected), "\(expected)")
+        }
+    }
+
+    @Test func aSavedStyleFromAnOlderBuildStillDecodes() throws {
+        // `vocal` is now titled "Vocal booster" but keeps its stored name.
+        #expect(try JSONDecoder().decode(MusicGenre.self, from: Data("\"vocal\"".utf8)) == .vocal)
+    }
+
+    @Test func survivesEncoding() throws {
+        let data = try JSONEncoder().encode(MusicGenre.hipHop)
+        #expect(try JSONDecoder().decode(MusicGenre.self, from: data) == .hipHop)
+    }
+}
+
 @Suite("Lighting effects")
 struct EffectTests {
     @Test func solidIsConstant() {

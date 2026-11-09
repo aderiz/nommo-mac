@@ -18,7 +18,7 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-    fail("usage: nommoctl info | brightness N | color R G B [secs] | split R G B R G B [secs] | effect spectrum|breathing [secs] | eq-preset NAME | eq b1..b10 | movie [secs] [intensity] [smoothness]")
+    fail("usage: nommoctl info | brightness N | color R G B [secs] | split R G B R G B [secs] | effect spectrum|breathing [secs] | eq-preset NAME | eq-music STYLE | eq b1..b10 | movie [secs] [intensity] [smoothness]")
 }
 
 func byte(_ s: String) -> UInt8 {
@@ -51,6 +51,7 @@ func run() async throws {
     case "info":
         print("serial:     \(try await device.serialNumber())")
         print("brightness: \(try await device.brightness())/255")
+        print("eq preset:  \(try await device.eqPreset()?.title ?? "unknown")")
         print("eq bands:   \(try await device.eqBands())")
     case "brightness":
         guard let v = rest.first else { usage() }
@@ -84,6 +85,13 @@ func run() async throws {
         guard let name = rest.first, let preset = EQPreset.allCases.first(where: { $0.title.lowercased() == name }) else { usage() }
         try await device.setEQPreset(preset)
         print("preset \(preset.title)")
+    case "eq-music":
+        let names = MusicGenre.allCases.map { $0.rawValue.lowercased() }
+        guard let name = rest.first?.lowercased(), let genre = MusicGenre.allCases.first(where: { $0.rawValue.lowercased() == name }) else {
+            fail("usage: nommoctl eq-music \(names.joined(separator: "|"))")
+        }
+        try await device.setMusicGenre(genre)
+        print("music style \(genre.title); bands now \(try await device.eqBands())")
     case "eq":
         guard rest.count == EQ.bandCount else { usage() }
         try await device.setEQBands(rest.map(byte))

@@ -142,6 +142,17 @@ public actor NommoDevice {
         try await send(0x08, 0x04, [0] + rawValues)
     }
 
+    /// Plays a style of music: the speaker's own Music tuning for `.standard`, otherwise that style's curve through
+    /// the Custom preset. This replaces whatever Custom curve the speaker was holding.
+    public func setMusicGenre(_ genre: MusicGenre) async throws {
+        guard let raw = genre.rawBands else {
+            try await setEQPreset(.music)
+            return
+        }
+        try await setEQPreset(.custom)
+        try await setEQBands(raw)
+    }
+
     public func eqBands() async throws -> [UInt8] {
         let data = try await query(0x08, 0x84)
         return Array(data[1 ... EQ.bandCount])

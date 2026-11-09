@@ -31,8 +31,8 @@ what Synapse sends them. See [docs/PROTOCOL.md](docs/PROTOCOL.md) if you are int
 - **Lighting.** Solid colours (a different one per speaker if you like), a two-colour Breathe, Spectrum, a Music
   mode that makes the lights follow whatever is playing, and a **Movie** mode that extends the picture on your screen
   into the room. Brightness control.
-- **Equaliser.** The speaker's built-in presets (Game, Music, Movie) and a ten-band Custom EQ that runs on the
-  speaker itself, with named profiles you can save and switch between.
+- **Equaliser.** The speaker's built-in presets (Game, Music, Movie), a choice of music styles under Music, and a
+  ten-band Custom EQ that runs on the speaker itself, with named profiles you can save and switch between.
 - **Spatial audio.** An original stereo effect for two close speakers: crosstalk cancellation that makes the sound
   reach past the speakers, or a simple widener. This is **not THX**; see [below](#spatial-audio-and-thx).
 - **Lives in the menu bar.** Optional launch at login. A `nommoctl` command-line tool is included too.
@@ -90,6 +90,11 @@ Click the menu-bar icon.
 - **Sound.** Pick a preset, or choose **Custom** to shape ten bands. Drag a fader, double-click to zero a band,
   and save the curve as a named profile from the bookmark menu. The built-in presets are tuned inside the speaker, which
   does not tell the app what their curves are, so they are shown as presets only.
+  Under **Music**, the style menu starts on **Default**, the speaker's own Music sound. The rest is the usual list
+  from music players: Flat, Acoustic, Bass booster, Bass reducer, Classical, Dance, Deep, Electronic, Hip-hop, Jazz,
+  Latin, Loudness, Lounge, Piano, Pop, R&B, Rock, Small speakers, Spoken word, Treble booster, Treble reducer and
+  Vocal booster. Choose one to play its curve instead, and **Edit as Custom** to start from it. The styles are my own starting points, not tuned against a reference. Each is written to the speaker as its
+  Custom curve, so your own Custom curve is kept in the app and put back when you choose Custom.
 - **Space.** Turn spatial audio on and choose **Immersive** (crosstalk cancellation) or **Widen**. Sit centred in front
   of the speakers for Immersive.
 
@@ -129,6 +134,7 @@ nommoctl info                      # serial, brightness, EQ bands
 nommoctl color 255 0 128 10        # hold a colour for 10 seconds
 nommoctl effect spectrum 15
 nommoctl brightness 128
+nommoctl eq-music rock             # play a Music style through the Custom EQ
 nommoctl movie 60                  # follow the screen for a minute (needs Screen Recording)
 ```
 
@@ -175,6 +181,10 @@ using the *device report* template and say what worked. Even "nothing happened" 
   getting it wrong can drop the USB connection until you press the speaker's own button.
 - **Presets' curves.** Game, Music and Movie can be selected but their curves can't be read back from the speaker.
   (This is the speaker's EQ preset called Movie, not the Movie lighting mode.)
+- **Music styles are untested by ear.** They are whole-dB curves of at most 6 dB written for this project (they are
+  not copied from any player), kept modest because the speaker is compact and the dB span of its bands has not been
+  checked by ear. A style plays through the
+  speaker's Custom preset, so the speaker's own Custom curve is replaced while one is active.
 - **Not tested over a power cycle:** whether the speaker remembers a custom EQ curve after it is switched off.
 
 ### Movie mode: what to expect

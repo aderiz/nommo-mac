@@ -187,87 +187,128 @@ struct SpeakerView: View {
     }
 }
 
-// MARK: - EQ faders
+// MARK: - EQ curve
 
-/// Ten faders in the accent colour, with the response curve drawn smoothly through their thumbs.
-struct FaderBank: View {
+/// The equaliser as a response curve: a glowing line in the accent colour through ten draggable points, over a wash
+/// that fades towards the bottom, with the dB range at the left and the band frequencies underneath.
+struct EQCurve: View {
     let values: [Double]
+    /// False draws the curve only, for a style the speaker plays but that isn't being edited.
+    var editable = true
     @Binding var activeBand: Int?
     let onChange: (Int, Double) -> Void
     @Environment(\.accent) private var accent
 
     private let maxDB = EQ.maxDecibels
-    private let inset: CGFloat = 14
+    /// Room above +12 dB and below -12 dB for the points and the glow.
+    private let inset: CGFloat = 12
+    /// Room at the left for the dB labels.
+    private let gutter: CGFloat = 46
 
     var body: some View {
-        GeometryReader { geo in
-            let size = geo.size
-            let columnWidth = size.width / CGFloat(values.count)
-            let color = accent.color
+        VStack(spacing: 8) {
+            GeometryReader { geo in plot(size: geo.size) }
+            HStack(spacing: 0) {
+                ForEach(Array(EQ.frequencies.enumerated()), id: \.offset) { index, hz in
+                    Text(EQ.label(for: hz))
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(activeBand == index ? Theme.text : Theme.dim)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.leading, gutter)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Equaliser curve")
+        .accessibilityValue(zip(EQ.frequencies, values).map { "\(EQ.label(for: $0)) Hz \(Int($1)) dB" }.joined(separator: ", "))
+    }
 
+    private func plot(size: CGSize) -> some View {
+        let column = (size.width - gutter) / CGFloat(values.count)
+        let midY = size.height / 2
+        let travel = midY - inset
+
+        return ZStack(alignment: .topLeading) {
             Canvas { context, _ in
-                let midY = size.height / 2
-                let travel = midY - inset
-                func position(_ i: Int) -> CGPoint {
-                    CGPoint(x: columnWidth * (CGFloat(i) + 0.5), y: midY - CGFloat(values[i] / maxDB) * travel)
+                let color = accent.color
+                let top = inset, bottom = size.height - inset
+                let points = values.indices.map { i in
+                    CGPoint(x: gutter + column * (CGFloat(i) + 0.5), y: midY - CGFloat(values[i] / maxDB) * travel)
                 }
 
-                for (db, alpha) in [(6.0, 0.05), (0.0, 0.20), (-6.0, 0.05)] {
+                var zero = Path()
+                zero.move(to: CGPoint(x: gutter, y: midY)); zero.addLine(to: CGPoint(x: size.width, y: midY))
+                context.stroke(zero, with: .color(.white.opacity(0.16)), lineWidth: 1)
+
+                for (i, p) in points.enumerated() {
                     var line = Path()
-                    let y = midY - CGFloat(db / maxDB) * travel
-                    line.move(to: CGPoint(x: 2, y: y)); line.addLine(to: CGPoint(x: size.width - 2, y: y))
-                    context.stroke(line, with: .color(.white.opacity(alpha)), style: StrokeStyle(lineWidth: 1, dash: db == 0 ? [] : [2, 5]))
+                    line.move(to: CGPoint(x: p.x, y: top - 4)); line.addLine(to: CGPoint(x: p.x, y: bottom + 4))
+                    context.stroke(line, with: .color(activeBand == i ? color.opacity(0.6) : .white.opacity(0.07)), lineWidth: 1)
                 }
 
-                for i in values.indices {
-                    let p = position(i)
-                    var track = Path()
-                    track.move(to: CGPoint(x: p.x, y: inset - 6)); track.addLine(to: CGPoint(x: p.x, y: size.height - inset + 6))
-                    context.stroke(track, with: .color(.white.opacity(0.07)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    var fill = Path()
-                    fill.move(to: CGPoint(x: p.x, y: midY)); fill.addLine(to: p)
-                    context.stroke(fill, with: .color(color), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                guard let first = points.first, let last = points.last, points.count > 1 else { return }
+                let curve = Self.smoothPath(points)
+
+                var wash = curve
+                wash.addLine(to: CGPoint(x: last.x, y: bottom)); wash.addLine(to: CGPoint(x: first.x, y: bottom)); wash.closeSubpath()
+                context.fill(wash, with: .linearGradient(
+                    Gradient(stops: [
+                        .init(color: color.opacity(0.7), location: 0),
+                        .init(color: color.opacity(0.36), location: 0.5),
+                        .init(color: color.opacity(0), location: 1),
+                    ]),
+                    startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: bottom)
+                ))
+
+                context.drawLayer { layer in
+                    layer.addFilter(.shadow(color: color.opacity(0.75), radius: 7))
+                    layer.stroke(curve, with: .color(color), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
                 }
 
-                let points = values.indices.map(position)
-                if points.count > 1 {
-                    let curve = Self.smoothPath(points)
-                    var wash = curve
-                    wash.addLine(to: CGPoint(x: points[points.count - 1].x, y: midY)); wash.addLine(to: CGPoint(x: points[0].x, y: midY)); wash.closeSubpath()
-                    var washLayer = context
-                    washLayer.opacity = 0.14
-                    washLayer.fill(wash, with: .color(color))
-                    context.stroke(curve, with: .color(color.opacity(0.9)), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                }
-
-                for i in values.indices {
-                    let p = position(i)
-                    let r: CGFloat = (activeBand == i) ? 8.5 : 7
-                    let rect = CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+                for (i, p) in points.enumerated() {
+                    let r: CGFloat = activeBand == i ? 7.5 : 5.5
                     if activeBand == i {
-                        context.fill(Path(ellipseIn: rect.insetBy(dx: -5, dy: -5)), with: .color(color.opacity(0.28)))
+                        context.fill(Path(ellipseIn: CGRect(x: p.x - r - 5, y: p.y - r - 5, width: (r + 5) * 2, height: (r + 5) * 2)), with: .color(color.opacity(0.3)))
                     }
-                    context.fill(Path(ellipseIn: rect), with: .color(.white))
+                    context.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white))
                 }
             }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { drag in
-                        let band = activeBand ?? min(max(Int(drag.startLocation.x / columnWidth), 0), values.count - 1)
+                        let band = activeBand ?? band(at: drag.startLocation.x, column: column)
                         activeBand = band
-                        let midY = size.height / 2
-                        let db = Double((midY - drag.location.y) / (midY - inset)) * maxDB
+                        let db = Double((midY - drag.location.y) / travel) * maxDB
                         onChange(band, min(max(db, -maxDB), maxDB).rounded())
                     }
-                    .onEnded { _ in activeBand = nil }
+                    .onEnded { _ in activeBand = nil },
+                including: editable ? .all : .none
             )
             .simultaneousGesture(
-                SpatialTapGesture(count: 2).onEnded { tap in
-                    onChange(min(max(Int(tap.location.x / columnWidth), 0), values.count - 1), 0)
-                }
+                SpatialTapGesture(count: 2).onEnded { tap in onChange(band(at: tap.location.x, column: column), 0) },
+                including: editable ? .all : .none
             )
+
+            axisLabel("+12 dB").position(x: (gutter - 8) / 2, y: inset)
+            axisLabel("0").position(x: (gutter - 8) / 2, y: midY)
+            axisLabel("\u{2212}12 dB").position(x: (gutter - 8) / 2, y: size.height - inset)
         }
+        .allowsHitTesting(editable)
+    }
+
+    private func axisLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(Theme.dim)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: gutter - 8, alignment: .trailing)
+            .allowsHitTesting(false)
+    }
+
+    private func band(at x: CGFloat, column: CGFloat) -> Int {
+        min(max(Int((x - gutter) / column), 0), values.count - 1)
     }
 
     /// Catmull-Rom spline through the points, as cubic Béziers.

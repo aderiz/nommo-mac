@@ -420,10 +420,11 @@ private struct SoundPanel: View {
     @State private var activeBand: Int?
     @Environment(\.accent) private var accent
 
-    private var isCustom: Bool { store.activePreset == .custom }
+    private var isCustom: Bool { store.shownPreset == .custom }
+    private var isMusic: Bool { store.shownPreset == .music }
 
     private var preset: Binding<EQPreset?> {
-        Binding(get: { store.activePreset }, set: { if let p = $0 { store.selectPreset(p) } })
+        Binding(get: { store.shownPreset }, set: { if let p = $0 { store.selectPreset(p) } })
     }
 
     var body: some View {
@@ -440,14 +441,34 @@ private struct SoundPanel: View {
                         QuietButton(title: "Flat", systemImage: "equal") { store.resetEQ() }
                     }
                 }
-                FaderBank(values: store.settings.eqDecibels, activeBand: $activeBand, onChange: { store.setBand($0, to: $1) })
-                    .frame(height: 140)
-                HStack(spacing: 0) {
-                    ForEach(EQ.frequencies, id: \.self) { hz in
-                        Text(EQ.label(for: hz)).font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(Theme.dim)
-                            .frame(maxWidth: .infinity)
+                EQCurve(values: store.settings.eqDecibels, activeBand: $activeBand, onChange: { store.setBand($0, to: $1) })
+                    .frame(height: 168)
+            } else if isMusic {
+                HStack {
+                    GenreChip(store: store)
+                    Spacer()
+                    QuietButton(title: "Edit as Custom", systemImage: "slider.vertical.3") { store.editGenreAsCustom() }
+                }
+                if store.musicGenreLive, let curve = store.settings.musicGenre.decibels {
+                    // A style's curve is ours, so it can be drawn; it just isn't editable until it becomes Custom.
+                    EQCurve(values: curve, editable: false, activeBand: .constant(nil), onChange: { _, _ in })
+                        .frame(height: 168)
+                } else {
+                    Spacer(minLength: 0)
+                    VStack(spacing: 12) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(accent.color)
+                            .frame(width: 60, height: 60)
+                            .background(Circle().fill(accent.tint).overlay(Circle().strokeBorder(accent.color.opacity(0.6), lineWidth: 1.2)))
+                        Text("Music is tuned inside the speaker")
+                            .font(Theme.display(14)).foregroundStyle(Theme.text)
+                        Text("This is the speaker's own Music sound. Pick a style to change it.")
+                            .font(Theme.caption).foregroundStyle(Theme.dim).multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: .infinity)
+                    Spacer(minLength: 0)
                 }
             } else {
                 Spacer(minLength: 0)
@@ -474,6 +495,54 @@ private struct SoundPanel: View {
         let db = Int(store.settings.eqDecibels[band])
         let sign = db > 0 ? "+" : (db < 0 ? "−" : "")
         return "\(sign)\(abs(db)) dB · \(EQ.label(for: EQ.frequencies[band])) Hz"
+    }
+}
+
+/// A menu button's face: a symbol, a name and a chevron.
+private struct ChipLabel: View {
+    let symbol: String
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol).font(.system(size: 10))
+            Text(title).font(Theme.label)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy)).foregroundStyle(Theme.dim)
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .surface(radius: 20, strong: true)
+    }
+}
+
+/// The style of music played under the Music preset. Default is the speaker's own Music tuning.
+private struct GenreChip: View {
+    @Bindable var store: AppStore
+    @Environment(\.isSnapshot) private var isSnapshot
+
+    var body: some View {
+        if isSnapshot {
+            label
+        } else {
+            Menu {
+                ForEach(MusicGenre.allCases) { genre in
+                    Button {
+                        store.selectGenre(genre)
+                    } label: {
+                        if genre == store.shownGenre { Label(genre.title, systemImage: "checkmark") } else { Text(genre.title) }
+                    }
+                    if genre == .standard { Divider() }
+                }
+            } label: { label }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .fixedSize()
+        }
+    }
+
+    private var label: some View {
+        ChipLabel(symbol: "music.note", title: store.shownGenre.title)
+            .accessibilityLabel("Music style, \(store.shownGenre.title)")
     }
 }
 
@@ -509,14 +578,7 @@ private struct ProfileChip: View {
     }
 
     private var label: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "bookmark.fill").font(.system(size: 10))
-            Text(title).font(Theme.label)
-            Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy)).foregroundStyle(Theme.dim)
-        }
-        .foregroundStyle(Theme.text)
-        .padding(.horizontal, 12).padding(.vertical, 7)
-        .surface(radius: 20, strong: true)
+        ChipLabel(symbol: "bookmark.fill", title: title)
     }
 
     private var title: String {
