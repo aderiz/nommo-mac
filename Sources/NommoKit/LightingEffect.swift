@@ -23,13 +23,16 @@ public enum LightingEffect: Codable, Equatable, Sendable {
     case off
     /// Reacts to the music playing on the Mac. `sensitivity` scales the response (1 = normal).
     case music(left: RGB, right: RGB, style: MusicStyle, sensitivity: Double)
+    /// Extends the picture on the screen: each speaker shows the colour just past its edge of the screen.
+    /// Follows the soundtrack instead when the screen cannot be read.
+    case movie(MovieSettings)
 
     public static let `default` = LightingEffect.solid(left: RGB(0, 120, 255), right: RGB(0, 120, 255))
 
     /// True when frames change over time and need a fast stream.
     public var isAnimated: Bool {
         switch self {
-        case .breathing, .spectrum, .music: true
+        case .breathing, .spectrum, .music, .movie: true
         case .builtIn, .solid, .off: false
         }
     }
@@ -42,7 +45,15 @@ public enum LightingEffect: Codable, Equatable, Sendable {
 
     /// True for effects that need the system audio levels.
     public var reactsToAudio: Bool {
-        if case .music = self { return true }
+        switch self {
+        case .music, .movie: true
+        default: false
+        }
+    }
+
+    /// True for effects that need to see the screen.
+    public var reactsToPicture: Bool {
+        if case .movie = self { return true }
         return false
     }
 
@@ -64,7 +75,8 @@ public enum LightingEffect: Codable, Equatable, Sendable {
                 }
                 return (mix(levels.left), mix(levels.right))
             }
-        case .builtIn, .off:
+        case .builtIn, .off, .movie:
+            // `.movie` needs state over time; the lighting engine runs a `MovieFollower` for it.
             return (.black, .black)
         case let .solid(left, right):
             return (left, right)

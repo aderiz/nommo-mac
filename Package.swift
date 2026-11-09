@@ -17,6 +17,7 @@ let package = Package(
         .executableTarget(name: "NommoApp", dependencies: ["NommoUI", "NommoKit"]),
         .executableTarget(name: "nommoctl", dependencies: ["NommoKit"]),
         .executableTarget(name: "NommoSnapshot", dependencies: ["NommoUI", "NommoKit"]),
+        .executableTarget(name: "screenprobe"),
         .testTarget(name: "NommoKitTests", dependencies: ["NommoKit"]),
     ]
 )

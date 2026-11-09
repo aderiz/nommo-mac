@@ -9,6 +9,8 @@ import NommoKit
 //   nommoctl effect <spectrum|breathing> [seconds]
 //   nommoctl eq-preset <game|music|movie|custom>
 //   nommoctl eq <b1> ... <b10>                raw band values (12 = flat)
+//   nommoctl movie [seconds] [intensity] [smoothness]
+//                                             speakers extend the screen (falls back to the soundtrack)
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -16,7 +18,7 @@ func fail(_ message: String) -> Never {
 }
 
 func usage() -> Never {
-    fail("usage: nommoctl info | brightness N | color R G B [secs] | split R G B R G B [secs] | effect spectrum|breathing [secs] | eq-preset NAME | eq b1..b10")
+    fail("usage: nommoctl info | brightness N | color R G B [secs] | split R G B R G B [secs] | effect spectrum|breathing [secs] | eq-preset NAME | eq b1..b10 | movie [secs] [intensity] [smoothness]")
 }
 
 func byte(_ s: String) -> UInt8 {
@@ -86,6 +88,34 @@ func run() async throws {
         guard rest.count == EQ.bandCount else { usage() }
         try await device.setEQBands(rest.map(byte))
         print("bands now \(try await device.eqBands())")
+    case "movie":
+        let secs = seconds(rest, default: 60)
+        let settings = MovieSettings(
+            intensity: rest.dropFirst().first.flatMap(Double.init) ?? 0.5,
+            smoothness: rest.dropFirst(2).first.flatMap(Double.init) ?? 0.5
+        )
+        let source = ScreenSceneSource()
+        do { try await source.start() } catch { fail("cannot read the screen: \(error)") }
+        let monitor = AudioLevelMonitor()
+        do { try monitor.start() } catch { print("note: soundtrack fallback is off (\(error))") }
+        let engine = LightingEngine(device: device, levels: { monitor.levels }, scene: { source.latest }) { error in
+            FileHandle.standardError.write(Data("lighting failed: \(error)\n".utf8))
+        }
+        await engine.apply(.movie(settings))
+        print("movie mode for \(Int(secs)) s, intensity \(settings.intensity), smoothness \(settings.smoothness)")
+        let end = Date().addingTimeInterval(secs)
+        while Date() < end {
+            try await Task.sleep(for: .seconds(1))
+            let driving = await engine.movieSource.map { "\($0)" } ?? "-"
+            if let scene = source.latest {
+                print("driving: \(driving)  screen L \(scene.left.rgb) R \(scene.right.rgb)\(scene.isBlank ? "  BLANK" : "")")
+            } else {
+                print("driving: \(driving)  no frames yet")
+            }
+        }
+        await engine.stop()
+        monitor.stop()
+        await source.stop()
     default:
         usage()
     }
