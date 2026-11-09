@@ -189,15 +189,21 @@ struct SpeakerView: View {
 
 // MARK: - EQ curve
 
-/// The equaliser as a response curve: a glowing line in the accent colour through ten draggable points, over a wash
-/// that fades towards the bottom, with the dB range at the left and the band frequencies underneath.
+/// The equaliser as a response curve: a glowing line through ten draggable points, over a wash that fades towards the
+/// bottom, with the dB range at the left and the band frequencies underneath. Frequency is colour-coded from warm
+/// bass to cool treble, like a spectrum analyser.
 struct EQCurve: View {
     let values: [Double]
     /// False draws the curve only, for a style the speaker plays but that isn't being edited.
     var editable = true
     @Binding var activeBand: Int?
     let onChange: (Int, Double) -> Void
-    @Environment(\.accent) private var accent
+
+    /// One colour per band, low to high: red-orange bass, through green and cyan mids, to violet treble.
+    static let bandColors: [Color] = [
+        Color(hex: 0xFF4D5E), Color(hex: 0xFF7A45), Color(hex: 0xFFA630), Color(hex: 0xFFD23F), Color(hex: 0x7BE15C),
+        Color(hex: 0x2FD6A5), Color(hex: 0x2EC4F5), Color(hex: 0x4C8DFF), Color(hex: 0x8A6BFF), Color(hex: 0xD35CFF),
+    ]
 
     private let maxDB = EQ.maxDecibels
     /// Room above +12 dB and below -12 dB for the points and the glow.
@@ -212,7 +218,7 @@ struct EQCurve: View {
                 ForEach(Array(EQ.frequencies.enumerated()), id: \.offset) { index, hz in
                     Text(EQ.label(for: hz))
                         .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(activeBand == index ? Theme.text : Theme.dim)
+                        .foregroundStyle(Self.bandColors[index].opacity(activeBand == index ? 1 : 0.85))
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -230,7 +236,7 @@ struct EQCurve: View {
 
         return ZStack(alignment: .topLeading) {
             Canvas { context, _ in
-                let color = accent.color
+                let colors = Self.bandColors
                 let top = inset, bottom = size.height - inset
                 let points = values.indices.map { i in
                     CGPoint(x: gutter + column * (CGFloat(i) + 0.5), y: midY - CGFloat(values[i] / maxDB) * travel)
@@ -243,34 +249,48 @@ struct EQCurve: View {
                 for (i, p) in points.enumerated() {
                     var line = Path()
                     line.move(to: CGPoint(x: p.x, y: top - 4)); line.addLine(to: CGPoint(x: p.x, y: bottom + 4))
-                    context.stroke(line, with: .color(activeBand == i ? color.opacity(0.6) : .white.opacity(0.07)), lineWidth: 1)
+                    context.stroke(line, with: .color(colors[i].opacity(activeBand == i ? 0.7 : 0.16)), lineWidth: 1)
                 }
 
-                guard let first = points.first, let last = points.last, points.count > 1 else { return }
+                guard let first = points.first, let last = points.last, points.count > 1, colors.count == points.count else { return }
                 let curve = Self.smoothPath(points)
+                // One gradient runs along the curve from the first band to the last, so frequency is its colour.
+                let spectrum = GraphicsContext.Shading.linearGradient(
+                    Gradient(stops: colors.enumerated().map { .init(color: $1, location: CGFloat($0) / CGFloat(colors.count - 1)) }),
+                    startPoint: CGPoint(x: first.x, y: 0), endPoint: CGPoint(x: last.x, y: 0)
+                )
 
+                // The wash takes the spectrum colours and fades towards the bottom: fill it, then erase more of it lower down.
                 var wash = curve
                 wash.addLine(to: CGPoint(x: last.x, y: bottom)); wash.addLine(to: CGPoint(x: first.x, y: bottom)); wash.closeSubpath()
-                context.fill(wash, with: .linearGradient(
-                    Gradient(stops: [
-                        .init(color: color.opacity(0.7), location: 0),
-                        .init(color: color.opacity(0.36), location: 0.5),
-                        .init(color: color.opacity(0), location: 1),
-                    ]),
-                    startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: bottom)
-                ))
+                context.drawLayer { layer in
+                    layer.fill(wash, with: spectrum)
+                    layer.blendMode = .destinationOut
+                    layer.fill(Path(CGRect(x: 0, y: top, width: size.width, height: bottom - top)), with: .linearGradient(
+                        Gradient(stops: [
+                            .init(color: .black.opacity(0.22), location: 0),
+                            .init(color: .black.opacity(0.56), location: 0.5),
+                            .init(color: .black, location: 1),
+                        ]),
+                        startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: bottom)
+                    ))
+                }
 
                 context.drawLayer { layer in
-                    layer.addFilter(.shadow(color: color.opacity(0.75), radius: 7))
-                    layer.stroke(curve, with: .color(color), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                    layer.addFilter(.blur(radius: 6))
+                    layer.opacity = 0.85
+                    layer.stroke(curve, with: spectrum, style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
                 }
+                context.stroke(curve, with: spectrum, style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
 
                 for (i, p) in points.enumerated() {
                     let r: CGFloat = activeBand == i ? 7.5 : 5.5
                     if activeBand == i {
-                        context.fill(Path(ellipseIn: CGRect(x: p.x - r - 5, y: p.y - r - 5, width: (r + 5) * 2, height: (r + 5) * 2)), with: .color(color.opacity(0.3)))
+                        context.fill(Path(ellipseIn: CGRect(x: p.x - r - 5, y: p.y - r - 5, width: (r + 5) * 2, height: (r + 5) * 2)), with: .color(colors[i].opacity(0.35)))
                     }
-                    context.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white))
+                    let dot = CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+                    context.fill(Path(ellipseIn: dot), with: .color(.white))
+                    context.stroke(Path(ellipseIn: dot.insetBy(dx: 0.5, dy: 0.5)), with: .color(colors[i]), lineWidth: 2)
                 }
             }
             .contentShape(Rectangle())

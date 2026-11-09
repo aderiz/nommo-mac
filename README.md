@@ -87,7 +87,7 @@ Click the menu-bar icon.
   picture and the right speaker from the right (see [Movie mode](#movie-mode)).
   *Built-in* hands the lights back to the speaker's own colour cycle. The interface itself takes its accent colour
   from the colour you pick.
-- **Sound.** Pick a preset, or choose **Custom** to shape ten bands. Drag a fader, double-click to zero a band,
+- **Sound.** Pick a preset, or choose **Custom** to shape ten bands. Drag a point on the curve, double-click to zero a band,
   and save the curve as a named profile from the bookmark menu. The built-in presets are tuned inside the speaker, which
   does not tell the app what their curves are, so they are shown as presets only.
   Under **Music**, the style menu starts on **Default**, the speaker's own Music sound. The rest is the usual list
