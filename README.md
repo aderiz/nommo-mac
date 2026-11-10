@@ -153,6 +153,8 @@ allowed, and it prints nothing that identifies you or your speaker:
 - **"found but could not be opened"**: Razer Synapse, or a virtual machine with the speaker attached, has it.
 - **"system audio tap: failed"**: allow Nommo under System Settings → Privacy & Security → System Audio Recording
   (only Spatial audio and the Music and Movie lighting effects need it).
+- **No sound after turning on Spatial audio**: update to 0.2.3 or later. Earlier versions could play the processed sound
+  into the wrong device when the Music or Movie lighting effect was on. Turning Spatial audio off brings the sound back.
 - **"screen recording: not allowed"**: allow Nommo under System Settings → Privacy & Security → Screen & System Audio
   Recording (only Movie lighting needs it).
 - **Movie mode says "Can't read this video"**: the player is showing protected video, so the lights are following the
