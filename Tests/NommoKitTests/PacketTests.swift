@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 import Testing
 @testable import NommoKit
@@ -320,5 +321,61 @@ struct ProfileTests {
         let b = EQProfile(name: "A", decibels: Array(repeating: 0, count: EQ.bandCount))
         #expect(a != b)
         #expect(a.id != b.id)
+    }
+}
+
+@Suite("Finding the speaker's audio output")
+struct OutputDeviceTests {
+    private func device(
+        _ id: AudioDeviceID, _ name: String, transport: UInt32, output: Bool = true
+    ) -> AudioDeviceInfo {
+        AudioDeviceInfo(id: id, name: name, uid: "uid-\(id)", transport: transport, hasOutput: output, sampleRate: 48000)
+    }
+
+    private let speaker = AudioDeviceInfo(
+        id: 147, name: "Razer Nommo V2 Pro", uid: "usb-nommo", transport: kAudioDeviceTransportTypeUSB,
+        hasOutput: true, sampleRate: 48000
+    )
+
+    /// The bug: with Music lighting on, "Nommo Levels" (this app's own private aggregate) can be listed ahead of
+    /// the speaker. Playing spatial audio into it left the Mac silent, because the muting tap had already taken
+    /// everything else.
+    @Test func ignoresOwnAggregatesListedFirst() {
+        let list = [
+            device(197, "Nommo Levels", transport: kAudioDeviceTransportTypeAggregate),
+            device(199, "Nommo Spatial", transport: kAudioDeviceTransportTypeAggregate),
+            speaker,
+        ]
+        #expect(AudioDevices.chooseNommo(from: list)?.id == 147)
+    }
+
+    @Test func findsTheSpeakerWhateverTheOrder() {
+        let aggregate = device(197, "Nommo Levels", transport: kAudioDeviceTransportTypeAggregate)
+        #expect(AudioDevices.chooseNommo(from: [speaker, aggregate])?.id == 147)
+        #expect(AudioDevices.chooseNommo(from: [aggregate, speaker])?.id == 147)
+    }
+
+    @Test func neverChoosesAnAggregateOrVirtualDevice() {
+        let list = [
+            device(1, "Nommo Levels", transport: kAudioDeviceTransportTypeAggregate),
+            device(2, "Nommo mix", transport: kAudioDeviceTransportTypeAutoAggregate),
+            device(3, "Nommo loopback", transport: kAudioDeviceTransportTypeVirtual),
+        ]
+        #expect(AudioDevices.chooseNommo(from: list) == nil)
+    }
+
+    @Test func needsAnOutputAndTheNommoName() {
+        let list = [
+            device(1, "Razer Nommo V2 Pro", transport: kAudioDeviceTransportTypeUSB, output: false),
+            device(2, "MacBook Pro Speakers", transport: kAudioDeviceTransportTypeBuiltIn),
+            device(3, "BlackHole 16ch", transport: kAudioDeviceTransportTypeVirtual),
+        ]
+        #expect(AudioDevices.chooseNommo(from: list) == nil)
+        #expect(AudioDevices.chooseNommo(from: list + [speaker])?.id == 147)
+    }
+
+    @Test func matchesTheNameWithoutCaringAboutCase() {
+        let lower = device(5, "razer NOMMO v2 pro", transport: kAudioDeviceTransportTypeUSB)
+        #expect(AudioDevices.chooseNommo(from: [lower])?.id == 5)
     }
 }

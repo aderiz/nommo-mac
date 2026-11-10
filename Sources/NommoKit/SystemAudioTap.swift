@@ -114,7 +114,32 @@ final class SystemAudioTap: @unchecked Sendable {
 
 // MARK: - Core Audio lookups
 
+/// What the speaker lookup needs to know about one Core Audio device.
+struct AudioDeviceInfo: Equatable {
+    var id: AudioDeviceID
+    var name: String
+    var uid: String
+    var transport: UInt32
+    var hasOutput: Bool
+    var sampleRate: Double
+}
+
 enum AudioDevices {
+    /// Aggregate and virtual devices are never the speaker. This matters because this process creates private
+    /// aggregates of its own ("Nommo Levels", "Nommo Spatial") that carry "Nommo" in their name and the
+    /// speaker's output; they are visible to this process, and picking one of them as the playback device
+    /// sends the processed sound nowhere while the muting tap has already silenced everything else.
+    static func isPhysical(transport: UInt32) -> Bool {
+        transport != kAudioDeviceTransportTypeAggregate
+            && transport != kAudioDeviceTransportTypeAutoAggregate
+            && transport != kAudioDeviceTransportTypeVirtual
+    }
+
+    /// The first real output device whose name says Nommo.
+    static func chooseNommo(from devices: [AudioDeviceInfo]) -> AudioDeviceInfo? {
+        devices.first { $0.hasOutput && isPhysical(transport: $0.transport) && $0.name.localizedCaseInsensitiveContains("nommo") }
+    }
+
     static func findNommoOutput() -> OutputDevice? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -127,12 +152,27 @@ enum AudioDevices {
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr
         else { return nil }
 
-        for id in ids {
-            guard let name = string(id, kAudioObjectPropertyName), name.localizedCaseInsensitiveContains("nommo"),
-                  hasOutputStreams(id), let uid = string(id, kAudioDevicePropertyDeviceUID) else { continue }
-            return OutputDevice(id: id, uid: uid, sampleRate: nominalSampleRate(id))
+        let devices = ids.compactMap { id -> AudioDeviceInfo? in
+            guard let name = string(id, kAudioObjectPropertyName), let uid = string(id, kAudioDevicePropertyDeviceUID)
+            else { return nil }
+            return AudioDeviceInfo(
+                id: id, name: name, uid: uid, transport: transportType(id),
+                hasOutput: hasOutputStreams(id), sampleRate: nominalSampleRate(id)
+            )
         }
-        return nil
+        guard let device = chooseNommo(from: devices) else { return nil }
+        return OutputDevice(id: device.id, uid: device.uid, sampleRate: device.sampleRate)
+    }
+
+    static func transportType(_ device: AudioDeviceID) -> UInt32 {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
+        )
+        var type: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        _ = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &type)
+        return type
     }
 
     static func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
